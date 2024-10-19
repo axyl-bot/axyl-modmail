@@ -11,7 +11,6 @@ pub struct ModmailState {
 pub async fn create_modmail_thread(
     ctx: &Context,
     user: &User,
-    content: &str,
     state: Arc<Mutex<ModmailState>>,
 ) -> Result<ChannelId, String> {
     let config = Config::get();
@@ -44,13 +43,14 @@ pub async fn create_modmail_thread(
 
         match thread {
             Ok(thread) => {
-                if let Ok(messages) = thread.messages(&ctx.http, GetMessages::default().limit(1)).await {
+                if let Ok(messages) = thread
+                    .messages(&ctx.http, GetMessages::default().limit(1))
+                    .await
+                {
                     if let Some(first_message) = messages.first() {
                         let _ = first_message.pin(&ctx.http).await;
                     }
                 }
-
-                let _ = thread.say(&ctx.http, format!("{}: {}", user.mention(), content)).await;
 
                 let mut state = state.lock().await;
                 state.user_to_thread.insert(user.id, thread.id);
@@ -79,8 +79,20 @@ pub async fn modmail(
         "No content provided".to_string()
     };
 
-    match create_modmail_thread(ctx, &command.user, &content, state).await {
-        Ok(_) => "Modmail sent successfully! You can now continue the conversation in DMs.".to_string(),
+    match create_modmail_thread(ctx, &command.user, state.clone()).await {
+        Ok(thread_id) => {
+            if let Err(why) = thread_id
+                .say(
+                    &ctx.http,
+                    format!("{}: {}", command.user.mention(), content),
+                )
+                .await
+            {
+                println!("Error sending initial message to thread: {:?}", why);
+                return "Modmail thread created, but there was an error sending the initial message.".to_string();
+            }
+            "Modmail sent successfully! You can now continue the conversation in DMs.".to_string()
+        }
         Err(why) => format!("Error sending modmail: {}", why),
     }
 }
@@ -98,18 +110,16 @@ pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailSta
     let thread_id = if let Some(thread_id) = thread_id {
         match thread_id.to_channel(&ctx.http).await {
             Ok(_) => thread_id,
-            Err(_) => {
-                match create_modmail_thread(ctx, &msg.author, &msg.content, state.clone()).await {
-                    Ok(new_thread_id) => new_thread_id,
-                    Err(why) => {
-                        println!("Error creating new modmail thread: {}", why);
-                        return;
-                    }
+            Err(_) => match create_modmail_thread(ctx, &msg.author, state.clone()).await {
+                Ok(new_thread_id) => new_thread_id,
+                Err(why) => {
+                    println!("Error creating new modmail thread: {}", why);
+                    return;
                 }
-            }
+            },
         }
     } else {
-        match create_modmail_thread(ctx, &msg.author, &msg.content, state.clone()).await {
+        match create_modmail_thread(ctx, &msg.author, state.clone()).await {
             Ok(new_thread_id) => new_thread_id,
             Err(why) => {
                 println!("Error creating new modmail thread: {}", why);
@@ -121,14 +131,17 @@ pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailSta
     let formatted_message = format!("{}: {}", msg.author.mention(), msg.content);
     if let Err(why) = thread_id.say(&ctx.http, &formatted_message).await {
         println!("Error sending message to thread: {:?}", why);
-        match create_modmail_thread(ctx, &msg.author, &msg.content, state.clone()).await {
+        match create_modmail_thread(ctx, &msg.author, state.clone()).await {
             Ok(new_thread_id) => {
                 if let Err(why) = new_thread_id.say(&ctx.http, &formatted_message).await {
                     println!("Error sending message to new thread: {:?}", why);
                 }
             }
             Err(why) => {
-                println!("Error creating new modmail thread after failed message: {}", why);
+                println!(
+                    "Error creating new modmail thread after failed message: {}",
+                    why
+                );
             }
         }
     }
