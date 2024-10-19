@@ -77,7 +77,7 @@ pub async fn modmail(
     command: &CommandInteraction,
     state: Arc<Mutex<ModmailState>>,
 ) -> String {
-    let content = if let Some(option) = command.data.options.get(0) {
+    let content = if let Some(option) = command.data.options.first() {
         option
             .value
             .as_str()
