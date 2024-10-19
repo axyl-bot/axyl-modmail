@@ -55,6 +55,11 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
 
+        match resync_state(&ctx, self.state.clone()).await {
+            Ok(_) => println!("State resynced successfully"),
+            Err(e) => eprintln!("Error resyncing state: {}", e),
+        }
+
         ctx.set_presence(
             Some(ActivityData::custom("DM me to contact staff")),
             OnlineStatus::DoNotDisturb,
@@ -106,4 +111,55 @@ pub async fn run_bot() -> Result<(), Box<dyn std::error::Error>> {
     client.start().await?;
 
     Ok(())
+}
+
+pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Result<(), String> {
+    let config = Config::get();
+    let forum_channel_id = config.forum_channel_id;
+
+    let forum_channel = match ChannelId::new(forum_channel_id).to_channel(&ctx.http).await {
+        Ok(channel) => channel,
+        Err(_) => return Err("Could not find the specified forum channel".to_string()),
+    };
+
+    if let Channel::Guild(channel) = forum_channel {
+        if channel.kind != ChannelType::Forum {
+            return Err("The specified channel is not a forum channel".to_string());
+        }
+
+        let threads = ctx
+            .http
+            .get_guild_active_threads(channel.guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let mut new_state = ModmailState {
+            user_to_thread: std::collections::HashMap::new(),
+            thread_to_user: std::collections::HashMap::new(),
+        };
+
+        for thread in threads.threads {
+            if thread.parent_id == Some(channel.id) {
+                if let Ok(messages) = thread
+                    .id
+                    .messages(&ctx.http, GetMessages::default().limit(1))
+                    .await
+                {
+                    if let Some(first_message) = messages.first() {
+                        if let Some(user_mention) = first_message.mentions.first() {
+                            new_state.user_to_thread.insert(user_mention.id, thread.id);
+                            new_state.thread_to_user.insert(thread.id, user_mention.id);
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut state_guard = state.lock().await;
+        *state_guard = new_state;
+
+        Ok(())
+    } else {
+        Err("Could not find the specified forum channel".to_string())
+    }
 }

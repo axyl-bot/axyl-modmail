@@ -89,7 +89,7 @@ pub async fn modmail(
             Ok(_) => thread_id,
             Err(_) => match create_modmail_thread(ctx, &command.user, state.clone()).await {
                 Ok(new_thread_id) => new_thread_id,
-                Err(why) => return format!("Error creating new modmail thread: {}", why),
+                Err(why) => return format!("Error creating modmail thread: {}", why),
             },
         }
     } else {
@@ -142,19 +142,6 @@ pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailSta
     let formatted_message = format!("{}: {}", msg.author.mention(), msg.content);
     if let Err(why) = thread_id.say(&ctx.http, &formatted_message).await {
         println!("Error sending message to thread: {:?}", why);
-        match create_modmail_thread(ctx, &msg.author, state.clone()).await {
-            Ok(new_thread_id) => {
-                if let Err(why) = new_thread_id.say(&ctx.http, &formatted_message).await {
-                    println!("Error sending message to new thread: {:?}", why);
-                }
-            }
-            Err(why) => {
-                println!(
-                    "Error creating new modmail thread after failed message: {}",
-                    why
-                );
-            }
-        }
     }
 }
 
