@@ -204,6 +204,11 @@ pub async fn handle_thread_message(ctx: &Context, msg: &Message, state: Arc<Mute
             if let Err(why) = channel.send_message(&ctx.http, message_builder).await {
                 println!("Error sending DM: {:?}", why);
             }
+
+            let confirmation_message = "Your message has been sent to the user.";
+            if let Err(why) = msg.channel_id.say(&ctx.http, confirmation_message).await {
+                println!("Error sending confirmation message to staff: {:?}", why);
+            }
         }
     }
 }
