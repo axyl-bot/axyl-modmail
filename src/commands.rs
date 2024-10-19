@@ -154,11 +154,15 @@ pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailSta
     };
 
     let formatted_message = format!("{}: {}", msg.author.mention(), content);
-    
+
     let mut message_builder = CreateMessage::new().content(formatted_message);
 
     for attachment in &msg.attachments {
-        message_builder = message_builder.add_file(CreateAttachment::url(&ctx.http, &attachment.url).await.unwrap());
+        message_builder = message_builder.add_file(
+            CreateAttachment::url(&ctx.http, &attachment.url)
+                .await
+                .unwrap(),
+        );
     }
 
     if let Err(why) = thread_id.send_message(&ctx.http, message_builder).await {
@@ -186,11 +190,15 @@ pub async fn handle_thread_message(ctx: &Context, msg: &Message, state: Arc<Mute
             };
 
             let formatted_content = format!("{}: {}", msg.author.name, content);
-            
+
             let mut message_builder = CreateMessage::new().content(formatted_content);
 
             for attachment in &msg.attachments {
-                message_builder = message_builder.add_file(CreateAttachment::url(&ctx.http, &attachment.url).await.unwrap());
+                message_builder = message_builder.add_file(
+                    CreateAttachment::url(&ctx.http, &attachment.url)
+                        .await
+                        .unwrap(),
+                );
             }
 
             if let Err(why) = channel.send_message(&ctx.http, message_builder).await {
