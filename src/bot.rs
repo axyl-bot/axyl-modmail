@@ -4,6 +4,7 @@ use serenity::all::*;
 use serenity::async_trait;
 use serenity::builder::CreateInteractionResponse;
 use serenity::model::gateway::Ready;
+use serenity::model::user::OnlineStatus;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -52,6 +53,11 @@ impl EventHandler for Handler {
 
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
+
+        ctx.set_presence(
+            Some(ActivityData::custom("DM me to contact staff")),
+            OnlineStatus::DoNotDisturb,
+        );
 
         let guild_id = Config::get().guild_id;
 
