@@ -40,11 +40,12 @@ pub async fn create_modmail_thread(
             .create_forum_post(
                 &ctx.http,
                 CreateForumPost::new(
-                    format!("Modmail from {} {}", user.id, user.name),
+                    format!("Modmail from {}", user.name),
                     CreateMessage::new().content(format!(
-                        "<@&{}> New modmail from {}",
+                        "<@&{}> New modmail from {} (ID: {})",
                         role_id,
                         user.mention(),
+                        user.id
                     )),
                 ),
             )

@@ -136,9 +136,13 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
 
         for thread in threads.threads {
             if thread.parent_id == Some(channel.id) {
-                if let Some(user_id) = extract_user_id_from_thread_name(&thread.name) {
-                    new_state.user_to_thread.insert(user_id, thread.id);
-                    new_state.thread_to_user.insert(thread.id, user_id);
+                if let Ok(messages) = thread.id.messages(&ctx.http, GetMessages::default().limit(1)).await {
+                    if let Some(first_message) = messages.first() {
+                        if let Some(user_id) = extract_user_id_from_message(first_message) {
+                            new_state.user_to_thread.insert(user_id, thread.id);
+                            new_state.thread_to_user.insert(thread.id, user_id);
+                        }
+                    }
                 }
             }
         }
@@ -154,10 +158,6 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
     }
 }
 
-fn extract_user_id_from_thread_name(thread_name: &str) -> Option<UserId> {
-    thread_name
-        .strip_prefix("Modmail from ")
-        .and_then(|name| name.split_whitespace().next())
-        .and_then(|id_str| id_str.parse::<u64>().ok())
-        .map(UserId::new)
+fn extract_user_id_from_message(message: &Message) -> Option<UserId> {
+    message.mentions.first().map(|user| user.id)
 }
