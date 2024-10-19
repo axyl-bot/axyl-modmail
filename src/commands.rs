@@ -17,10 +17,19 @@ pub async fn create_modmail_thread(
     let forum_channel_id = config.forum_channel_id;
     let role_id = config.role_id;
 
-    let forum_channel = match ChannelId::new(forum_channel_id).to_channel(&ctx.http).await {
-        Ok(channel) => channel,
-        Err(_) => return Err("Could not find the specified forum channel".to_string()),
+    let existing_thread = {
+        let state_guard = state.lock().await;
+        state_guard.user_to_thread.get(&user.id).cloned()
     };
+
+    if let Some(thread_id) = existing_thread {
+        if let Ok(_) = thread_id.to_channel(&ctx.http).await {
+            return Ok(thread_id);
+        }
+    }
+
+    let forum_channel = ChannelId::new(forum_channel_id).to_channel(&ctx.http).await
+        .map_err(|_| "Could not find the specified forum channel".to_string())?;
 
     if let Channel::Guild(channel) = forum_channel {
         if channel.kind != ChannelType::Forum {
@@ -31,7 +40,7 @@ pub async fn create_modmail_thread(
             .create_forum_post(
                 &ctx.http,
                 CreateForumPost::new(
-                    format!("Modmail from {}", user.name),
+                    format!("Modmail from {} {}", user.id, user.name),
                     CreateMessage::new().content(format!(
                         "<@&{}> New modmail from {}",
                         role_id,
@@ -39,26 +48,22 @@ pub async fn create_modmail_thread(
                     )),
                 ),
             )
-            .await;
+            .await
+            .map_err(|why| format!("Error creating modmail thread: {}", why))?;
 
-        match thread {
-            Ok(thread) => {
-                if let Ok(messages) = thread
-                    .messages(&ctx.http, GetMessages::default().limit(1))
-                    .await
-                {
-                    if let Some(first_message) = messages.first() {
-                        let _ = first_message.pin(&ctx.http).await;
-                    }
-                }
-
-                let mut state = state.lock().await;
-                state.user_to_thread.insert(user.id, thread.id);
-                state.thread_to_user.insert(thread.id, user.id);
-                Ok(thread.id)
+        if let Ok(messages) = thread
+            .messages(&ctx.http, GetMessages::default().limit(1))
+            .await
+        {
+            if let Some(first_message) = messages.first() {
+                let _ = first_message.pin(&ctx.http).await;
             }
-            Err(why) => Err(format!("Error creating modmail thread: {}", why)),
         }
+
+        let mut state = state.lock().await;
+        state.user_to_thread.insert(user.id, thread.id);
+        state.thread_to_user.insert(thread.id, user.id);
+        Ok(thread.id)
     } else {
         Err("Could not find the specified forum channel".to_string())
     }
