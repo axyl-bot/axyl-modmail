@@ -153,7 +153,7 @@ pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailSta
         msg.content.clone()
     };
 
-    let formatted_message = format!("{}: {}", msg.author.mention(), content);
+    let formatted_message = format!("(**User**) {}: **{}**", msg.author.mention(), content);
 
     let mut message_builder = CreateMessage::new().content(formatted_message);
 
@@ -189,7 +189,7 @@ pub async fn handle_thread_message(ctx: &Context, msg: &Message, state: Arc<Mute
                 msg.content.clone()
             };
 
-            let formatted_content = format!("{}: {}", msg.author.name, content);
+            let formatted_content = format!("(**Staff**) {}: **{}**", msg.author.name, content);
 
             let mut message_builder = CreateMessage::new().content(formatted_content);
 
