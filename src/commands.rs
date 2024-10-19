@@ -151,6 +151,11 @@ pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailSta
     if let Err(why) = thread_id.say(&ctx.http, &formatted_message).await {
         println!("Error sending message to thread: {:?}", why);
     }
+
+    let confirmation_message = "Your message has been received and forwarded to the staff. They will respond as soon as possible.";
+    if let Err(why) = msg.channel_id.say(&ctx.http, confirmation_message).await {
+        println!("Error sending confirmation message to user: {:?}", why);
+    }
 }
 
 pub async fn handle_thread_message(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailState>>) {
