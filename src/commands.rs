@@ -28,7 +28,9 @@ pub async fn create_modmail_thread(
         }
     }
 
-    let forum_channel = ChannelId::new(forum_channel_id).to_channel(&ctx.http).await
+    let forum_channel = ChannelId::new(forum_channel_id)
+        .to_channel(&ctx.http)
+        .await
         .map_err(|_| "Could not find the specified forum channel".to_string())?;
 
     if let Channel::Guild(channel) = forum_channel {

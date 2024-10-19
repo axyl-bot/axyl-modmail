@@ -118,7 +118,9 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
     let forum_channel_id = config.forum_channel_id;
     let guild_id = config.guild_id;
 
-    let forum_channel = ChannelId::new(forum_channel_id).to_channel(&ctx.http).await
+    let forum_channel = ChannelId::new(forum_channel_id)
+        .to_channel(&ctx.http)
+        .await
         .map_err(|_| "Could not find the specified forum channel".to_string())?;
 
     if let Channel::Guild(channel) = forum_channel {
@@ -126,7 +128,10 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
             return Err("The specified channel is not a forum channel".to_string());
         }
 
-        let threads = ctx.http.get_guild_active_threads(GuildId::new(guild_id)).await
+        let threads = ctx
+            .http
+            .get_guild_active_threads(GuildId::new(guild_id))
+            .await
             .map_err(|e| format!("Failed to fetch threads: {}", e))?;
 
         let mut new_state = ModmailState {
@@ -136,13 +141,27 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
 
         for thread in threads.threads {
             if thread.parent_id == Some(channel.id) {
-                if let Ok(messages) = thread.id.messages(&ctx.http, GetMessages::default().limit(1)).await {
+                println!("Processing thread: {}", thread.id);
+                if let Ok(mut messages) = thread
+                    .id
+                    .messages(&ctx.http, GetMessages::default().limit(100))
+                    .await
+                {
+                    messages.sort_by_key(|m| m.timestamp);
                     if let Some(first_message) = messages.first() {
+                        println!("First message content: {}", first_message.content);
                         if let Some(user_id) = extract_user_id_from_message(first_message) {
                             new_state.user_to_thread.insert(user_id, thread.id);
                             new_state.thread_to_user.insert(thread.id, user_id);
+                            println!("Successfully extracted user ID: {} for thread: {}", user_id, thread.id);
+                        } else {
+                            println!("Could not extract user ID from thread: {}. Message content: {}", thread.id, first_message.content);
                         }
+                    } else {
+                        println!("No messages found in thread: {}", thread.id);
                     }
+                } else {
+                    println!("Failed to fetch messages for thread: {}", thread.id);
                 }
             }
         }
@@ -150,7 +169,10 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
         let mut state_guard = state.lock().await;
         *state_guard = new_state;
 
-        println!("State resynced. Active threads: {}", state_guard.user_to_thread.len());
+        println!(
+            "State resynced. Active threads: {}",
+            state_guard.user_to_thread.len()
+        );
 
         Ok(())
     } else {
@@ -159,5 +181,20 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
 }
 
 fn extract_user_id_from_message(message: &Message) -> Option<UserId> {
-    message.mentions.first().map(|user| user.id)
+    message.content
+        .split_whitespace()
+        .find_map(|word| {
+            if word.starts_with("<@") && word.ends_with('>') {
+                word.trim_start_matches("<@").trim_end_matches('>').parse::<u64>().ok().map(UserId::new)
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            message.content
+                .rsplit_once("(ID: ")
+                .and_then(|(_, id_part)| id_part.split_once(')'))
+                .and_then(|(id_str, _)| id_str.trim().parse::<u64>().ok())
+                .map(UserId::new)
+        })
 }
