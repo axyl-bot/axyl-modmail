@@ -23,7 +23,7 @@ pub async fn create_modmail_thread(
     };
 
     if let Some(thread_id) = existing_thread {
-        if let Ok(_) = thread_id.to_channel(&ctx.http).await {
+        if thread_id.to_channel(&ctx.http).await.is_ok() {
             return Ok(thread_id);
         }
     }
