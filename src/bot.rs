@@ -153,9 +153,15 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
                         if let Some(user_id) = extract_user_id_from_message(first_message) {
                             new_state.user_to_thread.insert(user_id, thread.id);
                             new_state.thread_to_user.insert(thread.id, user_id);
-                            println!("Successfully extracted user ID: {} for thread: {}", user_id, thread.id);
+                            println!(
+                                "Successfully extracted user ID: {} for thread: {}",
+                                user_id, thread.id
+                            );
                         } else {
-                            println!("Could not extract user ID from thread: {}. Message content: {}", thread.id, first_message.content);
+                            println!(
+                                "Could not extract user ID from thread: {}. Message content: {}",
+                                thread.id, first_message.content
+                            );
                         }
                     } else {
                         println!("No messages found in thread: {}", thread.id);
@@ -181,17 +187,23 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
 }
 
 fn extract_user_id_from_message(message: &Message) -> Option<UserId> {
-    message.content
+    message
+        .content
         .split_whitespace()
         .find_map(|word| {
             if word.starts_with("<@") && word.ends_with('>') {
-                word.trim_start_matches("<@").trim_end_matches('>').parse::<u64>().ok().map(UserId::new)
+                word.trim_start_matches("<@")
+                    .trim_end_matches('>')
+                    .parse::<u64>()
+                    .ok()
+                    .map(UserId::new)
             } else {
                 None
             }
         })
         .or_else(|| {
-            message.content
+            message
+                .content
                 .rsplit_once("(ID: ")
                 .and_then(|(_, id_part)| id_part.split_once(')'))
                 .and_then(|(id_str, _)| id_str.trim().parse::<u64>().ok())
