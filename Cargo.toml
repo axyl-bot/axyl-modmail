@@ -14,3 +14,5 @@ keywords = [
 edition = "2021"
 
 [dependencies]
+tokio = { version = "1.28", features = ["full"] }
+serenity = { version = "0.12.2", default-features = false, features = ["client", "gateway", "rustls_backend", "model"] }
