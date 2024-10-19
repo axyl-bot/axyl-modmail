@@ -79,22 +79,33 @@ pub async fn modmail(
         "No content provided".to_string()
     };
 
-    match create_modmail_thread(ctx, &command.user, state.clone()).await {
-        Ok(thread_id) => {
-            if let Err(why) = thread_id
-                .say(
-                    &ctx.http,
-                    format!("{}: {}", command.user.mention(), content),
-                )
-                .await
-            {
-                println!("Error sending initial message to thread: {:?}", why);
-                return "Modmail thread created, but there was an error sending the initial message.".to_string();
-            }
-            "Modmail sent successfully! You can now continue the conversation in DMs.".to_string()
+    let thread_id = {
+        let state_guard = state.lock().await;
+        state_guard.user_to_thread.get(&command.user.id).cloned()
+    };
+
+    let thread_id = if let Some(thread_id) = thread_id {
+        match thread_id.to_channel(&ctx.http).await {
+            Ok(_) => thread_id,
+            Err(_) => match create_modmail_thread(ctx, &command.user, state.clone()).await {
+                Ok(new_thread_id) => new_thread_id,
+                Err(why) => return format!("Error creating new modmail thread: {}", why),
+            },
         }
-        Err(why) => format!("Error sending modmail: {}", why),
+    } else {
+        match create_modmail_thread(ctx, &command.user, state.clone()).await {
+            Ok(new_thread_id) => new_thread_id,
+            Err(why) => return format!("Error creating modmail thread: {}", why),
+        }
+    };
+
+    let formatted_message = format!("{}: {}", command.user.mention(), content);
+    if let Err(why) = thread_id.say(&ctx.http, &formatted_message).await {
+        println!("Error sending message to thread: {:?}", why);
+        return "Error sending message to modmail thread.".to_string();
     }
+
+    "Modmail sent successfully! You can now continue the conversation in DMs.".to_string()
 }
 
 pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailState>>) {
