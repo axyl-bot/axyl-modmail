@@ -147,8 +147,21 @@ pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailSta
         }
     };
 
-    let formatted_message = format!("{}: {}", msg.author.mention(), msg.content);
-    if let Err(why) = thread_id.say(&ctx.http, &formatted_message).await {
+    let content = if msg.content.is_empty() && !msg.attachments.is_empty() {
+        "Sent an attachment".to_string()
+    } else {
+        msg.content.clone()
+    };
+
+    let formatted_message = format!("{}: {}", msg.author.mention(), content);
+    
+    let mut message_builder = CreateMessage::new().content(formatted_message);
+
+    for attachment in &msg.attachments {
+        message_builder = message_builder.add_file(CreateAttachment::url(&ctx.http, &attachment.url).await.unwrap());
+    }
+
+    if let Err(why) = thread_id.send_message(&ctx.http, message_builder).await {
         println!("Error sending message to thread: {:?}", why);
     }
 
@@ -166,8 +179,21 @@ pub async fn handle_thread_message(ctx: &Context, msg: &Message, state: Arc<Mute
     let state = state.lock().await;
     if let Some(&user_id) = state.thread_to_user.get(&msg.channel_id) {
         if let Ok(channel) = user_id.create_dm_channel(&ctx.http).await {
-            let formatted_message = format!("{}: {}", msg.author.name, msg.content);
-            if let Err(why) = channel.say(&ctx.http, &formatted_message).await {
+            let content = if msg.content.is_empty() && !msg.attachments.is_empty() {
+                "Sent an attachment".to_string()
+            } else {
+                msg.content.clone()
+            };
+
+            let formatted_content = format!("{}: {}", msg.author.name, content);
+            
+            let mut message_builder = CreateMessage::new().content(formatted_content);
+
+            for attachment in &msg.attachments {
+                message_builder = message_builder.add_file(CreateAttachment::url(&ctx.http, &attachment.url).await.unwrap());
+            }
+
+            if let Err(why) = channel.send_message(&ctx.http, message_builder).await {
                 println!("Error sending DM: {:?}", why);
             }
         }
