@@ -173,3 +173,36 @@ pub async fn handle_thread_message(ctx: &Context, msg: &Message, state: Arc<Mute
         }
     }
 }
+
+pub async fn close_thread(
+    ctx: &Context,
+    command: &CommandInteraction,
+    state: Arc<Mutex<ModmailState>>,
+) -> String {
+    let thread_id = command.channel_id;
+
+    let user_id = {
+        let state_guard = state.lock().await;
+        state_guard.thread_to_user.get(&thread_id).cloned()
+    };
+
+    if let Some(user_id) = user_id {
+        if let Err(why) = thread_id.delete(&ctx.http).await {
+            return format!("Failed to delete the thread: {}", why);
+        }
+
+        {
+            let mut state_guard = state.lock().await;
+            state_guard.thread_to_user.remove(&thread_id);
+            state_guard.user_to_thread.remove(&user_id);
+        }
+
+        if let Ok(dm_channel) = user_id.create_dm_channel(&ctx.http).await {
+            let _ = dm_channel.say(&ctx.http, "Your modmail thread has been closed by a staff member. If you need further assistance, feel free to start a new modmail.").await;
+        }
+
+        "Thread closed successfully. The user has been notified.".to_string()
+    } else {
+        "This command can only be used in a modmail thread.".to_string()
+    }
+}

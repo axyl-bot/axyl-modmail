@@ -18,6 +18,7 @@ impl EventHandler for Handler {
         if let Interaction::Command(command) = interaction {
             let content = match command.data.name.as_str() {
                 "modmail" => modmail(&ctx, &command, self.state.clone()).await,
+                "close" => close_thread(&ctx, &command, self.state.clone()).await,
                 _ => "Not implemented".to_string(),
             };
 
@@ -64,16 +65,19 @@ impl EventHandler for Handler {
         let commands = GuildId::new(guild_id)
             .set_commands(
                 &ctx.http,
-                vec![CreateCommand::new("modmail")
-                    .description("Send a modmail")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::String,
-                            "message",
-                            "The message to send as modmail",
-                        )
-                        .required(true),
-                    )],
+                vec![
+                    CreateCommand::new("modmail")
+                        .description("Send a modmail")
+                        .add_option(
+                            CreateCommandOption::new(
+                                CommandOptionType::String,
+                                "message",
+                                "The message to send as modmail",
+                            )
+                            .required(true),
+                        ),
+                    CreateCommand::new("close").description("Close the current modmail thread"),
+                ],
             )
             .await;
 
