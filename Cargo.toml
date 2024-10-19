@@ -1,6 +1,16 @@
 [package]
-name = "axyl-modmail"
+name = "axyl_modmail"
 version = "0.1.0"
+authors = ["Nyx <nnyyxxxx@protonmail.com>", "Adam Perkowski <adas1per@protonmail.com>", "AxylOS <lead@axylprojects.dev>"]
+license = "GPL-2.0"
+description = "Discord bot for modmail"
+repository = "https://github.com/axyl-bots/axyl-modmail.git"
+readme = "readme.md"
+keywords = [
+    "discord",
+    "bot",
+    "modmail",
+]
 edition = "2021"
 
 [dependencies]
