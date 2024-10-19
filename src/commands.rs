@@ -8,44 +8,36 @@ pub struct ModmailState {
     pub thread_to_user: std::collections::HashMap<ChannelId, UserId>,
 }
 
-pub async fn modmail(
+pub async fn create_modmail_thread(
     ctx: &Context,
-    command: &CommandInteraction,
+    user: &User,
+    content: &str,
     state: Arc<Mutex<ModmailState>>,
-) -> String {
+) -> Result<ChannelId, String> {
     let config = Config::get();
     let forum_channel_id = config.forum_channel_id;
     let role_id = config.role_id;
 
     let forum_channel = match ChannelId::new(forum_channel_id).to_channel(&ctx.http).await {
         Ok(channel) => channel,
-        Err(_) => return "Error: Could not find the specified forum channel".to_string(),
+        Err(_) => return Err("Could not find the specified forum channel".to_string()),
     };
 
     if let Channel::Guild(channel) = forum_channel {
         if channel.kind != ChannelType::Forum {
-            return "Error: The specified channel is not a forum channel".to_string();
+            return Err("The specified channel is not a forum channel".to_string());
         }
-
-        let content = if let Some(option) = command.data.options.get(0) {
-            option
-                .value
-                .as_str()
-                .unwrap_or("No content provided")
-                .to_string()
-        } else {
-            "No content provided".to_string()
-        };
 
         let thread = channel
             .create_forum_post(
                 &ctx.http,
                 CreateForumPost::new(
-                    format!("Modmail from {}", command.user.name),
+                    format!("Modmail from {}", user.name),
                     CreateMessage::new().content(format!(
-                        "<@&{}> New modmail from {}:\n{}",
+                        "<@&{}> New modmail from {}\n\n{}: {}",
                         role_id,
-                        command.user.mention(),
+                        user.mention(),
+                        user.mention(),
                         content
                     )),
                 ),
@@ -55,15 +47,35 @@ pub async fn modmail(
         match thread {
             Ok(thread) => {
                 let mut state = state.lock().await;
-                state.user_to_thread.insert(command.user.id, thread.id);
-                state.thread_to_user.insert(thread.id, command.user.id);
-                "Modmail sent successfully! You can now continue the conversation in DMs."
-                    .to_string()
+                state.user_to_thread.insert(user.id, thread.id);
+                state.thread_to_user.insert(thread.id, user.id);
+                Ok(thread.id)
             }
-            Err(why) => format!("Error sending modmail: {}", why),
+            Err(why) => Err(format!("Error creating modmail thread: {}", why)),
         }
     } else {
-        "Error: Could not find the specified forum channel".to_string()
+        Err("Could not find the specified forum channel".to_string())
+    }
+}
+
+pub async fn modmail(
+    ctx: &Context,
+    command: &CommandInteraction,
+    state: Arc<Mutex<ModmailState>>,
+) -> String {
+    let content = if let Some(option) = command.data.options.get(0) {
+        option
+            .value
+            .as_str()
+            .unwrap_or("No content provided")
+            .to_string()
+    } else {
+        "No content provided".to_string()
+    };
+
+    match create_modmail_thread(ctx, &command.user, &content, state).await {
+        Ok(_) => "Modmail sent successfully! You can now continue the conversation in DMs.".to_string(),
+        Err(why) => format!("Error sending modmail: {}", why),
     }
 }
 
@@ -72,11 +84,30 @@ pub async fn handle_dm(ctx: &Context, msg: &Message, state: Arc<Mutex<ModmailSta
         return;
     }
 
-    let state = state.lock().await;
-    if let Some(&thread_id) = state.user_to_thread.get(&msg.author.id) {
-        if let Err(why) = thread_id.say(&ctx.http, &msg.content).await {
-            println!("Error sending message to thread: {:?}", why);
+    let thread_id = {
+        let state_guard = state.lock().await;
+        if let Some(&thread_id) = state_guard.user_to_thread.get(&msg.author.id) {
+            Some(thread_id)
+        } else {
+            None
         }
+    };
+
+    let thread_id = if let Some(thread_id) = thread_id {
+        thread_id
+    } else {
+        match create_modmail_thread(ctx, &msg.author, &msg.content, state.clone()).await {
+            Ok(thread_id) => thread_id,
+            Err(why) => {
+                println!("Error creating modmail thread: {}", why);
+                return;
+            }
+        }
+    };
+
+    let formatted_message = format!("{}: {}", msg.author.mention(), msg.content);
+    if let Err(why) = thread_id.say(&ctx.http, &formatted_message).await {
+        println!("Error sending message to thread: {:?}", why);
     }
 }
 
@@ -88,7 +119,8 @@ pub async fn handle_thread_message(ctx: &Context, msg: &Message, state: Arc<Mute
     let state = state.lock().await;
     if let Some(&user_id) = state.thread_to_user.get(&msg.channel_id) {
         if let Ok(channel) = user_id.create_dm_channel(&ctx.http).await {
-            if let Err(why) = channel.say(&ctx.http, &msg.content).await {
+            let formatted_message = format!("{}: {}", msg.author.name, msg.content);
+            if let Err(why) = channel.say(&ctx.http, &formatted_message).await {
                 println!("Error sending DM: {:?}", why);
             }
         }
