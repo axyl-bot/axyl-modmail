@@ -1,10 +1,10 @@
-use crate::commands::*;
-use crate::config::Config;
-use serenity::all::*;
-use serenity::async_trait;
-use serenity::builder::CreateInteractionResponse;
-use serenity::model::gateway::Ready;
-use serenity::model::user::OnlineStatus;
+use crate::{commands::*, config::Config};
+use serenity::{
+    all::*,
+    async_trait,
+    builder::CreateInteractionResponse,
+    model::{gateway::Ready, user::OnlineStatus},
+};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
