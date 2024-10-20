@@ -77,15 +77,11 @@ pub async fn modmail(
     command: &CommandInteraction,
     state: Arc<Mutex<ModmailState>>,
 ) -> String {
-    let content = if let Some(option) = command.data.options.first() {
-        option
-            .value
-            .as_str()
-            .unwrap_or("No content provided")
-            .to_string()
-    } else {
-        "No content provided".to_string()
-    };
+    let content = command.data.options
+        .get(0)
+        .and_then(|opt| opt.value.as_str())
+        .unwrap_or("No content provided")
+        .to_string();
 
     let thread_id = {
         let state_guard = state.lock().await;
@@ -107,7 +103,7 @@ pub async fn modmail(
         }
     };
 
-    let formatted_message = format!("{}: {}", command.user.mention(), content);
+    let formatted_message = format!("(**User**) {}: **{}**", command.user.mention(), content);
     if let Err(why) = thread_id.say(&ctx.http, &formatted_message).await {
         println!("Error sending message to thread: {:?}", why);
         return "Error sending message to modmail thread.".to_string();
