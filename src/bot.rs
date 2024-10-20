@@ -65,26 +65,20 @@ impl EventHandler for Handler {
             OnlineStatus::DoNotDisturb,
         );
 
-        let guild_id = Config::get().guild_id;
-
-        let commands = GuildId::new(guild_id)
-            .set_commands(
-                &ctx.http,
-                vec![
-                    CreateCommand::new("modmail")
-                        .description("Send a modmail")
-                        .add_option(
-                            CreateCommandOption::new(
-                                CommandOptionType::String,
-                                "message",
-                                "The message to send as modmail",
-                            )
-                            .required(true),
-                        ),
-                    CreateCommand::new("close").description("Close the current modmail thread"),
-                ],
-            )
-            .await;
+        let commands = Command::set_global_commands(&ctx.http, vec![
+            CreateCommand::new("modmail")
+                .description("Send a modmail")
+                .add_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::String,
+                        "message",
+                        "The message to send as modmail",
+                    )
+                    .required(true),
+                ),
+            CreateCommand::new("close").description("Close the current modmail thread"),
+        ])
+        .await;
 
         println!("Slash commands registered: {:#?}", commands);
     }
@@ -116,7 +110,6 @@ pub async fn run_bot() -> Result<(), Box<dyn std::error::Error>> {
 pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Result<(), String> {
     let config = Config::get();
     let forum_channel_id = config.forum_channel_id;
-    let guild_id = config.guild_id;
 
     let forum_channel = ChannelId::new(forum_channel_id)
         .to_channel(&ctx.http)
@@ -130,7 +123,7 @@ pub async fn resync_state(ctx: &Context, state: Arc<Mutex<ModmailState>>) -> Res
 
         let threads = ctx
             .http
-            .get_guild_active_threads(GuildId::new(guild_id))
+            .get_guild_active_threads(channel.guild_id)
             .await
             .map_err(|e| format!("Failed to fetch threads: {}", e))?;
 
