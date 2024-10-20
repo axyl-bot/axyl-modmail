@@ -65,7 +65,14 @@ impl EventHandler for Handler {
             OnlineStatus::DoNotDisturb,
         );
 
-        let commands = Command::set_global_commands(&ctx.http, vec![
+        if let Err(why) = Command::set_global_commands(&ctx.http, vec![]).await {
+            println!("Failed to delete global commands: {:?}", why);
+            return;
+        }
+
+        println!("Deleted all existing global commands.");
+
+        let commands = vec![
             CreateCommand::new("modmail")
                 .description("Send a modmail")
                 .add_option(
@@ -77,10 +84,12 @@ impl EventHandler for Handler {
                     .required(true),
                 ),
             CreateCommand::new("close").description("Close the current modmail thread"),
-        ])
-        .await;
+        ];
 
-        println!("Slash commands registered: {:#?}", commands);
+        match Command::set_global_commands(&ctx.http, commands).await {
+            Ok(cmds) => println!("Successfully registered {} global commands", cmds.len()),
+            Err(why) => println!("Failed to register global commands: {:?}", why),
+        }
     }
 }
 

@@ -77,7 +77,9 @@ pub async fn modmail(
     command: &CommandInteraction,
     state: Arc<Mutex<ModmailState>>,
 ) -> String {
-    let content = command.data.options
+    let content = command
+        .data
+        .options
         .get(0)
         .and_then(|opt| opt.value.as_str())
         .unwrap_or("No content provided")
