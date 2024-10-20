@@ -182,32 +182,47 @@ pub async fn handle_thread_message(ctx: &Context, msg: &Message, state: Arc<Mute
 
     let state = state.lock().await;
     if let Some(&user_id) = state.thread_to_user.get(&msg.channel_id) {
-        if let Ok(channel) = user_id.create_dm_channel(&ctx.http).await {
-            let content = if msg.content.is_empty() && !msg.attachments.is_empty() {
-                "Sent an attachment".to_string()
-            } else {
-                msg.content.clone()
-            };
+        let dm_result = user_id.create_dm_channel(&ctx.http).await;
 
-            let formatted_content = format!("(**Staff**) {}: **{}**", msg.author.name, content);
+        match dm_result {
+            Ok(channel) => {
+                let content = if msg.content.is_empty() && !msg.attachments.is_empty() {
+                    "Sent an attachment".to_string()
+                } else {
+                    msg.content.clone()
+                };
 
-            let mut message_builder = CreateMessage::new().content(formatted_content);
+                let formatted_content = format!("(**Staff**) {}: **{}**", msg.author.name, content);
 
-            for attachment in &msg.attachments {
-                message_builder = message_builder.add_file(
-                    CreateAttachment::url(&ctx.http, &attachment.url)
-                        .await
-                        .unwrap(),
-                );
+                let mut message_builder = CreateMessage::new().content(formatted_content);
+
+                for attachment in &msg.attachments {
+                    message_builder = message_builder.add_file(
+                        CreateAttachment::url(&ctx.http, &attachment.url)
+                            .await
+                            .unwrap(),
+                    );
+                }
+
+                if let Err(why) = channel.send_message(&ctx.http, message_builder).await {
+                    println!("Error sending DM: {:?}", why);
+                    let error_message =
+                        "Failed to send the message to the user. They may have DMs disabled.";
+                    if let Err(why) = msg.channel_id.say(&ctx.http, error_message).await {
+                        println!("Error sending error message to staff: {:?}", why);
+                    }
+                } else {
+                    let confirmation_message = "Your message has been sent to the user.";
+                    if let Err(why) = msg.channel_id.say(&ctx.http, confirmation_message).await {
+                        println!("Error sending confirmation message to staff: {:?}", why);
+                    }
+                }
             }
-
-            if let Err(why) = channel.send_message(&ctx.http, message_builder).await {
-                println!("Error sending DM: {:?}", why);
-            }
-
-            let confirmation_message = "Your message has been sent to the user.";
-            if let Err(why) = msg.channel_id.say(&ctx.http, confirmation_message).await {
-                println!("Error sending confirmation message to staff: {:?}", why);
+            Err(_) => {
+                let error_message = "Unable to send a message to this user. They may have DMs disabled or have blocked the bot.";
+                if let Err(why) = msg.channel_id.say(&ctx.http, error_message).await {
+                    println!("Error sending error message to staff: {:?}", why);
+                }
             }
         }
     }
